@@ -4,7 +4,7 @@
 
 FROM amd64/python:3.9-slim as htm-core-fork
 
-# ==> 1.2 Install htm.core installation prereqs
+# ==> 1.2 Install htm.core setup prereqs
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ca-certificates \
@@ -23,21 +23,21 @@ ENV PATH="/opt/venv/bin:$PATH"
 WORKDIR /app/deps
 RUN git clone --depth 1 -b master https://github.com/ZhekaHauska/htm.core.git
 
-# ==> 1.6 pip install reqs and htm.core
+# ==> 1.6 pip install htm.core and its requirements
 WORKDIR /app/deps/htm.core
 RUN pip install --no-cache-dir --upgrade \
         setuptools \
         pip \
         wheel \
     && pip install --no-cache-dir -r requirements.txt \
-    && pip install --no-cache-dir .
-
-WORKDIR /app/deps
-RUN rm -r htm.core
+    && pip install --no-cache-dir . \
+    # remove git cloned directory - we don't need it anymore
+    && cd .. \
+    && rm -r htm.core
 
 
 # ============= 2. HIMA ==================
-FROM amd64/python:3.9-slim as hima
+FROM amd64/python:3.9-slim as hima-base
 
 # ==> 2.1.2 Install common prereqs
 RUN DEBIAN_FRONTEND=noninteractive \
@@ -48,6 +48,7 @@ RUN DEBIAN_FRONTEND=noninteractive \
         tar \
         xz-utils \
         git \
+        git-lfs \
         zsh \
     && rm -rf /var/lib/apt/lists/*
 
@@ -89,7 +90,6 @@ RUN DEBIAN_FRONTEND=noninteractive \
         # qt5-default \
         libffi-dev \
         xvfb \
-        git-lfs \
         g++ \
     && rm -rf /var/lib/apt/lists/*
 
@@ -100,6 +100,7 @@ RUN DEBIAN_FRONTEND=noninteractive \
 # copy venv with `htm.core` from `htm-core-fork` image
 #   pip and other setup tools are copied updated from htm-core-fork
 COPY --from=htm-core-fork /opt/venv /opt/venv
+#   make sure we use the virtualenv:
 ENV PATH="/opt/venv/bin:$PATH"
 
 # ==> 2.6 Install PyRep: clone, install, remove sources

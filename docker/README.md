@@ -41,7 +41,7 @@
 
 - `pip install --no-cache-dir` prevents storing intermediate installation artifacts
 - `&& rm -rf /var/lib/apt/lists/*` after `apt-get ...` removes unnescessary artifacts
-- `git clone --depth 1 --branch master` clone only the last commit
+- `git clone --depth 1 --branch master` clones only the last commit
 - `rm ...` remove archives or any other not required files after you used them, e.g. CoppeliaSim archive or PyRep sources.
 
 ## Other notes
