@@ -15,6 +15,7 @@ from htm.bindings.sdr import SDR
 from htm.bindings.math import Random
 
 from scipy.stats import entropy
+from itertools import combinations
 import numpy as np
 import warnings
 import pygraphviz as pgv
@@ -38,7 +39,9 @@ class Factors:
             initial_synapse_value,
             max_segments,
             fraction_of_segments_to_prune,
-            max_segments_per_cell
+            max_segments_per_cell,
+            connection_threshold_learn: int,
+            connection_threshold_belief: int
     ):
         """
             hidden vars are those that we predict, or output vars
@@ -58,6 +61,8 @@ class Factors:
         self.n_hidden_states = n_hidden_states
         self.max_factors = n_hidden_vars * max_factors_per_var
         self.max_segments_per_cell = max_segments_per_cell
+        self.connection_threshold_learn = connection_threshold_learn
+        self.connection_threshold_belief = connection_threshold_belief
 
         self.connections = Connections(
             numCells=n_cells,
@@ -228,14 +233,17 @@ class Factors:
         messages = messages[self.receptive_fields[active_segments]]
         synapse_efficiency = self.synapse_efficiency[active_segments]
 
-        dependent_part = messages * synapse_efficiency
-        dependent_part = np.log(np.mean(dependent_part, axis=-1))
-
-        independent_part = np.sum((1 - synapse_efficiency) * np.log(messages), axis=-1)
-
-        log_likelihood = dependent_part + independent_part
-
-        return log_likelihood
+        likelihood = np.array([
+            np.sum([
+                (np.sum(messages[l, list(indices)] * synapse_efficiency[l, list(indices)]) / len(indices)) *
+                np.prod(messages[l, list(indices)] ** (1 - synapse_efficiency[l, list(indices)]))
+                for k in range(self.connection_threshold_belief, self.n_vars_per_factor + 1)
+                for indices in combinations(range(self.n_vars_per_factor), k)
+            ])
+            for l in range(synapse_efficiency.shape[0])
+        ])
+        
+        return np.log(likelihood)
 
 
 class Layer:
@@ -577,7 +585,7 @@ class Layer:
         )
 
         active_segments = np.flatnonzero(
-            num_connected_segment >= factors.n_vars_per_factor
+            num_connected_segment >= factors.connection_threshold_belief
         )
         cells_for_active_segments = factors.connections.mapSegmentsToCells(active_segments)
 
@@ -737,7 +745,7 @@ class Layer:
             False
         )
 
-        active_segments = np.flatnonzero(num_connected >= factors.n_vars_per_factor)
+        active_segments = np.flatnonzero(num_connected >= factors.connection_threshold_learn)
 
         cells_for_active_segments = factors.connections.mapSegmentsToCells(active_segments)
 
