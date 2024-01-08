@@ -1,0 +1,42 @@
+log: True
+save_model: True
+project_name: 'mpg_dhtm'
+run_tag: 'test'
+n_episodes: 1001
+raw_obs_shape: 8
+smf_dist: 0.005
+
+encoder: sp_grouped
+decoder: learned
+
+# config paths
+layer_conf: 'configs/dhtm/pinball.yaml'
+encoder_conf: 'configs/encoder/sp_grouped_pinball.yaml'
+decoder_conf: 'configs/decoder/pinball.yaml'
+mpg_conf: 'configs/mpg/mmpg_default.yaml'
+
+seed: null
+
+coders: [
+  {
+  'B': [1, 5],
+  'P': [0, 3],
+  'T': [1, 3],
+  'V': [2, 3],
+  'S': [0, 4],
+  'X': [1, 4],
+  'Z': [0, 5],
+  'E': [2, 4]
+  },
+  {
+  'B': [0, 5],
+  'P': [1, 4],
+  'T': [2, 4],
+  'V': [3, 5],
+  'S': [0, 6],
+  'X': [1, 6],
+  'Z': [2, 7],
+  'E': [3, 7]
+  }
+]
+coders_policy: 0
