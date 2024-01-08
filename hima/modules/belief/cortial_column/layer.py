@@ -40,8 +40,7 @@ class Factors:
             max_segments,
             fraction_of_segments_to_prune,
             max_segments_per_cell,
-            connection_threshold_learn: int,
-            connection_threshold_belief: int
+            connection_threshold: int
     ):
         """
             hidden vars are those that we predict, or output vars
@@ -61,8 +60,7 @@ class Factors:
         self.n_hidden_states = n_hidden_states
         self.max_factors = n_hidden_vars * max_factors_per_var
         self.max_segments_per_cell = max_segments_per_cell
-        self.connection_threshold_learn = connection_threshold_learn
-        self.connection_threshold_belief = connection_threshold_belief
+        self.connection_threshold = connection_threshold
 
         self.connections = Connections(
             numCells=n_cells,
@@ -237,7 +235,7 @@ class Factors:
             np.sum([
                 (np.sum(messages[l, list(indices)] * synapse_efficiency[l, list(indices)]) / len(indices)) *
                 np.prod(messages[l, list(indices)] ** (1 - synapse_efficiency[l, list(indices)]))
-                for k in range(self.connection_threshold_belief, self.n_vars_per_factor + 1)
+                for k in range(self.connection_threshold, self.n_vars_per_factor + 1)
                 for indices in combinations(range(self.n_vars_per_factor), k)
             ])
             for l in range(synapse_efficiency.shape[0])
@@ -272,6 +270,7 @@ class Layer:
             developmental_period: int = 10000,
             enable_context_connections: bool = True,
             enable_internal_connections: bool = True,
+            cells_activity_lr: float = 0.1,
             seed: int = None,
     ):
         self._rng = np.random.default_rng(seed)
@@ -281,6 +280,7 @@ class Layer:
         else:
             self._legacy_rng = Random()
 
+        self.lr = 1.0
         self.timestep = 1
         self.developmental_period = developmental_period
         self.n_obs_vars = n_obs_vars
@@ -292,6 +292,7 @@ class Layer:
         self.n_context_states = n_context_states
         self.external_vars_boost = external_vars_boost
         self.unused_vars_boost = unused_vars_boost
+        self.cells_activity_lr = cells_activity_lr
 
         self.cells_per_column = cells_per_column
         self.n_hidden_states = cells_per_column * n_obs_states
@@ -336,6 +337,10 @@ class Layer:
         self.context_messages = np.zeros(
             self.context_input_size,
             dtype=REAL64_DTYPE
+        )
+
+        self.internal_cells_activity = np.zeros_like(
+            self.internal_forward_messages
         )
 
         self.prediction_cells = None
@@ -517,10 +522,15 @@ class Layer:
             ).flatten()
 
         # update connections
-        if learn:
+        if learn and self.lr > 0:
             # sample cells from messages (1-step Monte-Carlo learning)
+            # internal cells cooldown to avoid self-loops
+            internal_messages = self.internal_forward_messages.copy()
+            internal_messages *= (1 - self.internal_cells_activity)
+            internal_messages = normalize(internal_messages.reshape((self.n_hidden_vars, -1)))
+
             self.internal_active_cells.sparse = self._sample_cells(
-                self.internal_forward_messages.reshape((self.n_hidden_vars, -1))
+                internal_messages
             )
             self.context_active_cells.sparse = self._sample_cells(
                 self.context_messages.reshape((self.n_context_vars, -1))
@@ -560,6 +570,10 @@ class Layer:
                     prune_segments=(self.timestep % self.developmental_period) == 0
                 )
 
+            self.internal_cells_activity += self.cells_activity_lr * (
+                    self.internal_active_cells.dense - self.internal_cells_activity
+            )
+
         self.timestep += 1
 
     def _propagate_belief(
@@ -585,7 +599,7 @@ class Layer:
         )
 
         active_segments = np.flatnonzero(
-            num_connected_segment >= factors.connection_threshold_belief
+            num_connected_segment >= factors.connection_threshold
         )
         cells_for_active_segments = factors.connections.mapSegmentsToCells(active_segments)
 
@@ -745,7 +759,7 @@ class Layer:
             False
         )
 
-        active_segments = np.flatnonzero(num_connected >= factors.connection_threshold_learn)
+        active_segments = np.flatnonzero(num_connected >= factors.connection_threshold)
 
         cells_for_active_segments = factors.connections.mapSegmentsToCells(active_segments)
 
