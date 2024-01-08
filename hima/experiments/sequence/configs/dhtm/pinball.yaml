@@ -21,9 +21,9 @@ context_factors_conf:
   var_score_lr: 0.001
   initial_log_factor_value: 0
   initial_synapse_value: 1
-  max_segments: 500000
+  max_segments: 50000
   fraction_of_segments_to_prune: 0.0
-  max_segments_per_cell: 5000
-  connection_threshold_learn: 2
-  connection_threshold_belief: 2
+  max_segments_per_cell: 255
+  connection_threshold: 3
+
 reset_context_period: 0
