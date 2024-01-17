@@ -10,6 +10,7 @@ import yaml
 import os
 import sys
 from scipy.special import rel_entr
+import matplotlib.pyplot as plt
 
 import numpy as np
 
@@ -17,12 +18,9 @@ from hima.common.config.base import read_config, override_config
 from hima.common.lazy_imports import lazy_import
 from hima.common.run.argparse import parse_arg_list
 from hima.modules.belief.cortial_column.cortical_column import CorticalColumn, Layer
-from hima.experiments.successor_representations.runners.utils import make_decoder
 from hima.common.sdr import sparse_to_dense
 from hima.envs.mpg.mpg import MultiMarkovProcessGrammar
 from hima.common.metrics import get_surprise
-
-from typing import Literal
 
 wandb = lazy_import('wandb')
 
@@ -33,13 +31,13 @@ class MPGTest:
         self.seed = conf['run'].get('seed')
         self._rng = np.random.default_rng(self.seed)
         conf['mpg']['seed'] = self.seed
-        conf['mpg']['initial_policy'] = 2
+        conf['mpg']['initial_policy'] = conf['run']['mpg_initial_policy']
         self.logger = logger
         self.raw_obs_shape = conf['run']['raw_obs_shape']
         self.mpg = MultiMarkovProcessGrammar(**conf['mpg'])
         self.smf_dist = conf['run']['smf_dist']
-        self.layer_type = 'dhtm'
         self.n_episodes = conf['run']['n_episodes']
+        self.log_update_rate = conf['run']['update_rate']
         self.coders_policy = conf['run']['coders_policy']
         self.coders = conf['run']['coders']
     
@@ -80,7 +78,8 @@ class MPGTest:
         letter_to_numbers = self.coders[self.coders_policy]
         number_code = letter_to_numbers[letter]
         if noisy_var:
-            number_code = np.append(number_code, np.random.choice([6,7,8]))
+            ### change based on n_obs_states
+            number_code = np.append(number_code, np.random.choice([9, 10, 11]))
             return number_code
         else:
             return number_code
@@ -90,7 +89,8 @@ class MPGTest:
         letter_to_numbers = self.coders[self.coders_policy]
 
         for i, (key, value) in enumerate(letter_to_numbers.items()):
-            probs[i] = prediction[value[0]] * prediction[value[1]]
+            ### change based on n_obs_vars
+            probs[i] = prediction[value[0]] * prediction[value[1]] * prediction[value[2]]
 
         return probs / np.sum(probs)
 
@@ -126,20 +126,18 @@ class MPGTest:
                 if letter is None:
                     break
                 else:
-                    #obs_state = np.array([self.mpg.char_to_num[letter]])
                     obs_state = self.encode_letter(letter)
                     events = np.array(obs_state)
 
                 self.cortical_column.observe(events, None, learn=True)
-                column_probs = self.decode_letter(self.cortical_column.layer.prediction_columns)
 
-                if column_probs is None:
-                    column_probs = np.ones(self.raw_obs_shape) / self.raw_obs_shape
-                
+                prediction = np.clip(self.cortical_column.layer.prediction_columns, 0.05, 0.95)
+                final_probs = self.decode_letter(prediction)
+
                 # >>> logging
                 if self.logger is not None:
                     surprise = get_surprise(
-                        self.cortical_column.layer.prediction_columns[:6], obs_state[:2], mode='bernoulli'
+                        final_probs, np.array([self.mpg.char_to_num[letter]]), mode='categorical'
                     )
                     scalar_metrics_update = {
                         'main_metrics/surprise_hidden': surprise,
@@ -153,18 +151,18 @@ class MPGTest:
                         scalar_metrics_update
                     )
                 
-                column_probs = np.append(
-                    column_probs, np.clip(1 - column_probs.sum(), 0, 1)
+                final_probs = np.append(
+                    final_probs, np.clip(1 - final_probs.sum(), 0, 1)
                 )
-
-                delta = column_probs - dist[prev_state]
+                
+                delta = final_probs - dist[prev_state]
                 dist_disp[prev_state] += self.smf_dist * (
                         np.power(delta, 2) - dist_disp[prev_state])
                 dist[prev_state] += self.smf_dist * delta
 
                 if prev_state != 0:
                     dkl = min(
-                            rel_entr(true_dist[prev_state], column_probs).sum(),
+                            rel_entr(true_dist[prev_state], final_probs).sum(),
                             200.0
                         )
                     dkls.append(dkl)
@@ -183,6 +181,51 @@ class MPGTest:
                         'main_metrics/total_dkl': total_dkl,
                     }, step=i
                 )
+
+                if (self.log_update_rate is not None) and (i % self.log_update_rate == 0):
+                    kl_divs = rel_entr(true_dist, dist).sum(axis=-1)
+
+                    n_states = len(self.mpg.states)
+                    k = int(np.ceil(np.sqrt(n_states)))
+                    fig, axs = plt.subplots(k, k)
+                    fig.tight_layout(pad=3.0)
+
+                    tick_labels = self.mpg.alphabet.copy()
+                    tick_labels.append('∅')
+
+                    for n in range(n_states):
+                        ax = axs[n // k][n % k]
+                        ax.grid()
+                        ax.set_ylim(0, 1)
+                        ax.set_title(
+                            f's: {n}; ' + '$D_{KL}$: ' + f'{np.round(kl_divs[n], 2)}'
+                        )
+                        ax.bar(
+                            np.arange(dist[n].shape[0]),
+                            dist[n],
+                            tick_label=tick_labels,
+                            label='TM',
+                            color=(0.7, 1.0, 0.3),
+                            capsize=4,
+                            ecolor='#2b4162',
+                            yerr=np.sqrt(dist_disp[n])
+                        )
+                        ax.bar(
+                            np.arange(dist[n].shape[0]),
+                            true_dist[n],
+                            tick_label=tick_labels,
+                            color='#8F754F',
+                            alpha=0.6,
+                            label='True'
+                        )
+
+                        fig.legend(['Predicted', 'True'], loc=8)
+
+                        self.logger.log(
+                            {'density/letter_predictions': wandb.Image(fig)}, step=i
+                        )
+
+                        plt.close(fig)
             # <<< logging
 
 
@@ -190,33 +233,19 @@ class MPGTest:
         if saved_model_path is not None:
             raise NotImplementedError
         elif conf is not None:
-            layer_type = conf['run']['layer']
-  
             encoder_type = conf['run']['encoder']
             encoder_conf = conf['encoder']
             layer_conf = conf['layer']
             seed = conf['run']['seed']
 
-            if encoder_type == 'sp_ensemble':
-                from hima.modules.htm.spatial_pooler import SPDecoder, SPEnsemble
-
-                encoder_conf['seed'] = seed
-                encoder_conf['inputDimensions'] = list(self.raw_obs_shape)
-
-                encoder = SPEnsemble(**encoder_conf)
-                decoder = SPDecoder(encoder)
-            elif encoder_type == 'sp_grouped':
+            if encoder_type == 'sp_grouped':
                 from hima.experiments.temporal_pooling.stp.sp_ensemble import (
                     SpatialPoolerGroupedWrapper
                 )
                 encoder_conf['seed'] = seed
                 encoder_conf['feedforward_sds'] = [self.raw_obs_shape, 0.1]
 
-                decoder_type = conf['run'].get('decoder', None)
-                decoder_conf = conf['decoder']
-
                 encoder = SpatialPoolerGroupedWrapper(**encoder_conf)
-                decoder = make_decoder(encoder, decoder_type, decoder_conf)
             else:
                 raise ValueError(f'Encoder type {encoder_type} is not supported')
 
@@ -232,12 +261,10 @@ class MPGTest:
             layer_conf['n_external_vars'] = 0
             layer = Layer(**layer_conf)
 
-            encoder = None
-            decoder = None
             cortical_column = CorticalColumn(
                 layer,
-                encoder,
-                decoder
+                None,
+                None
             )
         else:
             raise ValueError
@@ -259,9 +286,6 @@ def main(config_path):
 
     if 'encoder_conf' in config['run']:
         config['encoder'] = read_config(config['run']['encoder_conf'])
-
-    if 'decoder_conf' in config['run']:
-        config['decoder'] = read_config(config['run']['decoder_conf'])
 
     overrides = parse_arg_list(sys.argv[2:])
     override_config(config, overrides)
