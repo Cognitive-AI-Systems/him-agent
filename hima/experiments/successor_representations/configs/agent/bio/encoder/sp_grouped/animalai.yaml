@@ -5,7 +5,7 @@ initial_rf_to_input_ratio: 6.0
 #target_rf_to_input_ratio: 2.0
 target_rf_to_input_ratio: 0.06
 # output
-output_sds: [[50, 3], 3]
+output_sds: [[50, 1], 1]
 # learning
 learning_rate: 0.04
 cross_group_inhibition_scale: 0.01

@@ -1,0 +1,19 @@
+log: True
+visualize: False
+project_name: gridworld_mdp_final
+run_tag: null
+
+action_inertia: 1
+frame_skip: 0
+strategies: null
+observe_actions: True
+reward_free: False
+
+setup: room2
+
+scenario: 'configs/scenario/gridworld_mdp_table.yaml'
+env_conf: 'configs/environment/gridworld/mdp.yaml'
+agent_conf: 'configs/agent/q/default.yaml'
+metrics_conf: 'configs/metrics/q/gridworld.yaml'
+
+seed: null

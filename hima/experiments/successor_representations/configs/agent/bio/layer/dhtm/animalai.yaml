@@ -1,5 +1,5 @@
-cells_per_column: 10
-n_hidden_vars_per_obs_var: 1
+cells_per_column: 40
+n_hidden_vars_per_obs_var: 3
 
 override_context: True
 replace_prior: False

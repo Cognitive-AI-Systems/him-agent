@@ -1,0 +1,19 @@
+log: True
+visualize: False
+project_name: gridworld_pomdp_final
+run_tag: oracle
+
+action_inertia: 1
+frame_skip: 0
+strategies: null
+observe_actions: True
+reward_free: False
+
+setup: room2
+
+scenario: 'configs/scenario/gridworld_mdp_cscg.yaml'
+env_conf: 'configs/environment/gridworld/mdp.yaml'
+agent_conf: 'configs/agent/bio/gridworld_mdp_cscg.yaml'
+metrics_conf: 'configs/metrics/bio/gridworld_mdp.yaml'
+
+seed: null

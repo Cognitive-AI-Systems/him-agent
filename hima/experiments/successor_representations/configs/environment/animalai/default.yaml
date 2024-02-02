@@ -1,7 +1,7 @@
-play: False
+play: True
 useCamera: True
 useRayCasts: False
-timescale: 1 #300
+timescale: 10 #300
 targetFrameRate: -1
-captureFrameRate: 30 # 0
-inference: True
+captureFrameRate: 0 # 0
+inference: False

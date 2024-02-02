@@ -1,14 +1,12 @@
-layer_conf: configs/agent/bio/layer/dhtm/animalai.yaml
-encoder_conf: configs/agent/bio/encoder/sp_grouped/animalai.yaml
-decoder_conf: configs/agent/bio/decoder/learned/animalai.yaml
-camera_mode: clip
+layer_conf: configs/agent/bio/layer/lstm/gridworld_pomdp.yaml
+camera_mode: null
 agent:
-  gamma: 0.9
+  gamma: 0.8
   observation_reward_lr: 0.1
   striatum_lr: 0.1
   td_steps: 0
   use_sf_as_state: False
-  inverse_temp: 50
+  inverse_temp: 25
 
   # p \in [0, 1]: eps-greedy | otherwise (use -1): softmax
   exploration_eps: -1
@@ -19,7 +17,7 @@ agent:
   plan_steps: 50
   approximate_tail: False
   sr_early_stop_uniform: 0.1
-  sr_early_stop_goal: 0.01
+  sr_early_stop_goal: 0.05
 
   # uniform | on_policy | off_policy
   sr_estimate_planning: uniform
@@ -28,4 +26,3 @@ agent:
   adaptive_lr: false
   lr_surprise: [0.2, 0.01]
   lr_td_error: [0.2, 0.01]
-
