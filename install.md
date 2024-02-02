@@ -66,9 +66,8 @@ If only was a way to track some signature of these files, store their content so
 File `requirements.txt` contains all required dependencies. Also, as commented in `requirements.txt`, you will need to install four additional dependencies:
 
 1. Our fork of the `htm.core` package.
-2. [optional] CoppeliaSim + PyRep
-3. [optional] AnimalAI
-4. [optional] Pinball
+2. [optional] AnimalAI
+3. [optional] Pinball
 
 In this section we provide you with two options: a) install requirements using both conda and pip or b) install everything with pip. In both cases everything is installed into the dedicated conda environment. The name of the environment is up to you, while we use `hima` for this guide.
 
@@ -94,14 +93,7 @@ pip install -r requirements.txt
 
 ### Step 3. Install `htm.core`
 
-In our research we use a slightly modified version of the `htm.core` package, thus you have to install our fork instead of the origin. The following script installs it from the sources:
-
-```bash
-cd <where to fork>
-git clone https://github.com/ZhekaHauska/htm.core.git
-cd htm.core
-pip install .
-```
+Not needed
 
 ### [Optional] Step 4. Install PyRep
 
@@ -125,8 +117,3 @@ _The last command installs `hima` with the "development mode" flag. It allows yo
 ### [Optional] Step 7. Install Pinball
 
 If you are planning to run experiments in [Pinball](https://github.com/ZhekaHauska/pinball) environment, you should also install it.
-
-### Project structure
-
-- `hima/` - the package sources
-  - `experiments/scirpts/run_agent.py` - runner, i.e. entry point to run testing scenarios.
