@@ -1,49 +1,42 @@
 # Learning Successor Features with Distributed Hebbian Temporal Memory
 
-## Quick install
+## Installation
+1. Install `htm.core` from the [repository](https://anonymous.4open.science/r/htm_core-DD2D) according to its instructions.
+2. Install `requirements.txt`
+3. Run `python install . -e` in the root of this repository containing `setup.py`.
+4. Setup [wandb](https://wandb.ai/site) logging system.
+5. Install [AnimalAI](https://github.com/Kinds-of-Intelligence-CFI/animal-ai)
+6. Define environment with the following variables:
 
-There are two setup guides:
-
-- [quick & short version](#quick-install) is here below.
-- [extended version](./install.md).
-
-Before cloning the repository, make sure Git LFS is installed (see [help](./install.md#step-2-install-git-lfs)). Then:
-
-```bash
-# create new env with the required packages via conda, then activate it
-conda create --name dhtm python=3.9 numpy matplotlib jupyterlab ruamel.yaml tqdm wandb mock imageio seaborn
-conda activate dhtm
-
-# install with pip the packages that cannot be installed with conda
-pip install hexy prettytable "pytest>=4.6.5"
-
-#  cd to the hima subdirectory in the project root and install hima package
-cd <project_root>
-pip install -e .
+```
+ANIMALAI_EXE=path/to/animal-ai/exe/file
+ANIMALAI_ROOT=path/to/animal-ai/project/root
+GRIDWORLD_ROOT=path/to/him-agent/hima/experiments/successor_representations/configs/environment/gridworld/setups
+OPENBLAS_NUM_THREADS=1
 ```
 
-## Run examples
+## Running experiments
+To run an experiment from the paper: 
+1. specify a path to a corresponding config `RUN_CONF=path/to/config.yaml`.
+2. run command: `python him-agent/hima/experiments/successor_representations/runners/test_icml.py`
 
-Sign up to [wandb](https://wandb.ai/) and get access token in your profile settings to authorize locally further on.
-
-### Run one experiment
-
-``` bash
-PLACE HERE THE COMMAND TO RUN ONE EXPERIMENT
+All configs are in the folder `him-agent/hima/experiments/successor_representations/configs/runner/icml24`.
+The folder contains configs for the following experiments:
 ```
-
-Do not forget to change `entity` parameter in the corresponding config file to match your [wandb](https://wandb.ai/) login. When wandb asks you to login for the first time, use your access token obtained earlier.
-
-### Run Sweep
-
-Wandb [sweep](https://docs.wandb.ai/guides/sweeps) runs series of experiments with different seeds and parameters.
-
-```bash
-PLACE HERE
+## Gridworld experiments with changing fully observable environemnt (Figure 3): 
+mdp_gridworld/ 
+    gridworld_mpd_dhtm.yaml
+    gridworld_mpd_cscg.yaml
+    gridworld_mpd_qtable.yaml
+    gridworld_mpd_srtable.yaml
+    
+## Gridworld experiments with changing partially observable environment (Figure 4):
+pomdp_gridworld/
+    girdworld_dhtm.yaml
+    gridworld_cscg.yaml
+    gridworld_lstm.yaml
+    
+## AnimalAI experiment (Figure 5)
+animalai_dhtm.yaml
 ```
-
-## License
-
-© 2022 Autonomous Non-Profit Organization "Artificial Intelligence Research Institute" (AIRI); Moscow Institute of Physics and Technology (National Research University). All rights reserved.
-
-Licensed under the [AGPLv3](./LICENSE) license.
+To reproduce figures from the paper, run each config at least 5 times with wandb logging enabled.

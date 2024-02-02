@@ -82,13 +82,13 @@ value_function:
     log_period: 100
 
 
-q_function:
-  class: Histogram
-  params:
-    name: agent/q_function
-    att: q_value
-    normalized: true
-    update_step: steps
-    update_period: 1
-    log_step: episodes
-    log_period: 100
+#q_function:
+#  class: Histogram
+#  params:
+#    name: agent/q_function
+#    att: q_value
+#    normalized: true
+#    update_step: steps
+#    update_period: 1
+#    log_step: episodes
+#    log_period: 100

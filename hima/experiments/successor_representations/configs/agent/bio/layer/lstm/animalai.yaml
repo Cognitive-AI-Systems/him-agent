@@ -1,6 +1,9 @@
-n_hidden_vars: 80
-n_hidden_states: 4
-
-lr: 0.0006
-loss_propagation_schedule: 20
+n_hidden_vars: 10
+n_hidden_states: 10
+lr: 0.02
+use_batches: True
+batch_size: 100
+num_epochs: 300
+early_stop_loss: 0.01
+retain_old_trajectories: 0.7
 

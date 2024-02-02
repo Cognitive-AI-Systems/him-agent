@@ -1,6 +1,6 @@
-n_sp: 6
-n_areas: 3
-columnDimensions: [ 12, 12 ]
+n_sp: 1
+n_areas: 1
+columnDimensions: [ 7, 7 ]
 potentialPct: 0.8
 globalInhibition: True
 potentialRadius: 8

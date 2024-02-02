@@ -1,3 +1,4 @@
 n_hidden_vars: 1
-n_hidden_states: 30
-lr: 0.002
+n_hidden_states: 125
+lr: 0.2
+loss_propagation_schedule: 1000

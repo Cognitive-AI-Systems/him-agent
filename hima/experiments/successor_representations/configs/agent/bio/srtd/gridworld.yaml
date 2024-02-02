@@ -1,5 +1,6 @@
-lr: 0.1
+lr: 0.01
 tau: 0.1
-batch_size: 32
+batch_size: 128
 hidden_size: 64
 n_hidden_layers: 1
+l2_regularization_weight: 0.001

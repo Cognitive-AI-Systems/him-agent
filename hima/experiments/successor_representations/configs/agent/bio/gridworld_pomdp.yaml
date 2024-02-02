@@ -5,15 +5,15 @@ layer_conf: configs/agent/bio/layer/fchmm/gridworld_pomdp.yaml
 # decoder_conf: configs/agent/bio/decoder/learned/gridworld.yaml
 camera_mode: null
 agent:
-  gamma: 0.99
+  gamma: 0.8
   observation_reward_lr: 0.1
   striatum_lr: 0.1
   td_steps: 0
   use_sf_as_state: False
-  inverse_temp: 10
+  inverse_temp: 25
 
   # p \in [0, 1]: eps-greedy | otherwise (use -1): softmax
-  exploration_eps: 0.05
+  exploration_eps: -1
   # predict | plan | balance === 0-step | n-step | td-error based probability to use n-step
   action_value_estimate: plan
   use_cached_plan: False
@@ -21,7 +21,7 @@ agent:
   plan_steps: 50
   approximate_tail: False
   sr_early_stop_uniform: 0.1
-  sr_early_stop_goal: 0.01
+  sr_early_stop_goal: 0.05
 
   # uniform | on_policy | off_policy
   sr_estimate_planning: uniform
