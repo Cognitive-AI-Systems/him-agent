@@ -13,6 +13,8 @@ torch
 torchvision
 torchaudio
 hmmlearn
+numba
+colormap
 
 # Install also (see `install.md`):
 #   1. Our fork of the htm.core

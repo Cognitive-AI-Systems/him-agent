@@ -2,7 +2,7 @@
 
 ## Installation
 1. Install `htm.core` from the [repository](https://anonymous.4open.science/r/htm_core-DD2D) according to its instructions.
-2. Install `requirements.txt`
+2. Install `requirements.txt`, `python>=3.9` is required.
 3. Run `python install . -e` in the root of this repository containing `setup.py`.
 4. Setup [wandb](https://wandb.ai/site) logging system.
 5. Install [AnimalAI](https://github.com/Kinds-of-Intelligence-CFI/animal-ai)
