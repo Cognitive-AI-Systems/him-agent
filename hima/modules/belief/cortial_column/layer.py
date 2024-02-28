@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 from hima.modules.htm.connections import Connections
 from hima.modules.belief.utils import softmax, normalize, sample_categorical_variables
 from hima.modules.belief.utils import EPS, INT_TYPE, UINT_DTYPE, REAL_DTYPE, REAL64_DTYPE
+from hima.common.sdr import sparse_to_dense
 
 from htm.bindings.sdr import SDR
 from htm.bindings.math import Random
@@ -40,7 +41,8 @@ class Factors:
             max_segments,
             fraction_of_segments_to_prune,
             max_segments_per_cell,
-            connection_threshold: int
+            connection_threshold: 2,
+            min_log_factor_value=-1,
     ):
         """
             hidden vars are those that we predict, or output vars
@@ -52,6 +54,7 @@ class Factors:
         self.var_score_lr = var_score_lr
         self.segment_activity_lr = segment_activity_lr
         self.factor_lr = factor_lr
+        self.min_log_factor_value = min_log_factor_value
         self.synapse_lr = synapse_lr
         self.max_factors_per_var = max_factors_per_var
         self.n_vars_per_factor = n_vars_per_factor
@@ -61,6 +64,8 @@ class Factors:
         self.max_factors = n_hidden_vars * max_factors_per_var
         self.max_segments_per_cell = max_segments_per_cell
         self.connection_threshold = connection_threshold
+        self.index_combinations = np.array(list(combinations(range(self.n_vars_per_factor),
+                                                              self.connection_threshold)))
 
         self.connections = Connections(
             numCells=n_cells,
@@ -162,16 +167,19 @@ class Factors:
             np.argpartition(score, n_segments)[:n_segments]
         ]
 
+        self._destroy_segments(segments_to_prune)
+
+        return segments_to_prune
+
+    def _destroy_segments(self, segments):
         filter_destroyed_segments = np.isin(
-            self.segments_in_use, segments_to_prune, invert=True
+            self.segments_in_use, segments, invert=True
         )
         self.segments_in_use = self.segments_in_use[filter_destroyed_segments]
 
-        for segment in segments_to_prune:
+        for segment in segments:
             self.connections.destroySegment(segment)
 
-        return segments_to_prune
-    
     def update_factors(
             self,
             segments_to_reinforce,
@@ -199,6 +207,10 @@ class Factors:
                 self.segment_activity_lr * self.segment_activity[non_active_segments]
         )
 
+        w = self.log_factor_values_per_segment[active_segments]
+        self._destroy_segments(active_segments[w < self.min_log_factor_value])
+
+        # prune segments based on their activity and factor value
         if prune:
             n_segments_to_prune = int(
                 self.fraction_of_segments_to_prune * len(self.segments_in_use)
@@ -231,16 +243,18 @@ class Factors:
         messages = messages[self.receptive_fields[active_segments]]
         synapse_efficiency = self.synapse_efficiency[active_segments]
 
-        likelihood = np.array([
-            np.sum([
-                (np.sum(messages[l, list(indices)] * synapse_efficiency[l, list(indices)]) / len(indices)) *
-                np.prod(messages[l, list(indices)] ** (1 - synapse_efficiency[l, list(indices)]))
-                for k in range(self.connection_threshold, self.n_vars_per_factor + 1)
-                for indices in combinations(range(self.n_vars_per_factor), k)
-            ])
-            for l in range(synapse_efficiency.shape[0])
-        ])
-        
+        index_combinations_np = np.array(self.index_combinations)
+
+        dependent_part = np.sum(messages[:, index_combinations_np] *
+                                synapse_efficiency[:, index_combinations_np],
+                                axis=2) / len(self.index_combinations[0])
+
+        independent_part = np.prod(np.power(messages[:, index_combinations_np],
+                                            1 - synapse_efficiency[:, index_combinations_np]),
+                                  axis=2)
+
+        likelihood = np.sum(dependent_part * independent_part, axis=1)
+
         return np.log(likelihood)
 
 
@@ -256,6 +270,7 @@ class Layer:
             n_obs_vars: int,
             n_obs_states: int,
             cells_per_column: int,
+            n_hidden_vars_per_obs_var: int = 1,
             context_factors_conf: dict = None,
             internal_factors_conf: dict = None,
             n_context_vars: int = 0,
@@ -271,6 +286,9 @@ class Layer:
             enable_context_connections: bool = True,
             enable_internal_connections: bool = True,
             cells_activity_lr: float = 0.1,
+            replace_prior: bool = False,
+            bursting_threshold: float = EPS,
+            override_context: bool = True,
             seed: int = None,
     ):
         self._rng = np.random.default_rng(seed)
@@ -284,7 +302,8 @@ class Layer:
         self.timestep = 1
         self.developmental_period = developmental_period
         self.n_obs_vars = n_obs_vars
-        self.n_hidden_vars = n_obs_vars
+        self.n_hidden_vars_per_obs_var = n_hidden_vars_per_obs_var
+        self.n_hidden_vars = n_obs_vars * n_hidden_vars_per_obs_var
         self.n_obs_states = n_obs_states
         self.n_external_vars = n_external_vars
         self.n_external_states = n_external_states
@@ -293,6 +312,9 @@ class Layer:
         self.external_vars_boost = external_vars_boost
         self.unused_vars_boost = unused_vars_boost
         self.cells_activity_lr = cells_activity_lr
+        self.replace_uniform_prior = replace_prior
+        self.bursting_threshold = bursting_threshold
+        self.override_context = override_context
 
         self.cells_per_column = cells_per_column
         self.n_hidden_states = cells_per_column * n_obs_states
@@ -326,6 +348,12 @@ class Layer:
         self.external_active_cells = SDR(self.external_input_size)
         self.context_active_cells = SDR(self.context_input_size)
 
+        if self.override_context:
+            if self.internal_active_cells.size != self.context_active_cells.size:
+                raise Warning(
+                    "Context override will not work as context and internal sizes are different."
+                )
+
         self.internal_forward_messages = np.zeros(
             self.internal_cells,
             dtype=REAL64_DTYPE
@@ -345,6 +373,7 @@ class Layer:
 
         self.prediction_cells = None
         self.prediction_columns = None
+        self.observation_messages = None
 
         # cells are numbered in the following order:
         # internal cells | context cells | external cells
@@ -374,6 +403,9 @@ class Layer:
             self.context_factors = None
             self.enable_context_connections = False
 
+        self.cells_to_grow_new_context_segments = np.empty(0)
+        self.new_context_segments = np.empty(0)
+
         if internal_factors_conf is not None and self.enable_internal_connections:
             internal_factors_conf['n_cells'] = self.total_cells
             internal_factors_conf['n_vars'] = self.total_vars
@@ -385,6 +417,8 @@ class Layer:
             self.enable_internal_connections = False
 
         assert (self.context_factors is not None) or (self.internal_factors is not None)
+
+        self.state_uni_dkl = 0
 
     def set_external_messages(self, messages=None):
         # update external cells
@@ -444,6 +478,10 @@ class Layer:
             dtype=REAL64_DTYPE
         )
 
+        self.context_active_cells.sparse = []
+        self.internal_active_cells.sparse = []
+        self.external_active_cells.sparse = []
+
         self.prediction_cells = None
         self.prediction_columns = None
 
@@ -496,9 +534,14 @@ class Layer:
             ).flatten()
 
         self.prediction_cells = self.internal_forward_messages.copy()
+
         self.prediction_columns = self.prediction_cells.reshape(
-            (self.n_columns, self.cells_per_column)
+            -1, self.cells_per_column
         ).sum(axis=-1)
+
+        self.prediction_columns = self.prediction_columns.reshape(
+            -1, self.n_hidden_vars_per_obs_var, self.n_obs_states
+        ).mean(axis=1).flatten()
 
     def observe(
             self,
@@ -509,41 +552,40 @@ class Layer:
             observation: pattern in sparse representation
         """
         # update messages
-        cells = self._get_cells_for_observation(observation)
-        obs_factor = np.zeros_like(self.internal_forward_messages)
-        obs_factor[cells] = 1
-        self.internal_forward_messages *= obs_factor
-
-        with warnings.catch_warnings():
-            warnings.filterwarnings('error')
-            self.internal_forward_messages = normalize(
-                self.internal_forward_messages.reshape((self.n_hidden_vars, -1)),
-                obs_factor.reshape((self.n_hidden_vars, -1))
-            ).flatten()
+        self._update_posterior(observation)
 
         # update connections
         if learn and self.lr > 0:
             # sample cells from messages (1-step Monte-Carlo learning)
-            # internal cells cooldown to avoid self-loops
-            internal_messages = self.internal_forward_messages.copy()
-            internal_messages *= (1 - self.internal_cells_activity)
-            internal_messages = normalize(internal_messages.reshape((self.n_hidden_vars, -1)))
+            if (
+                    self.override_context
+                    and
+                    (self.context_active_cells.size == self.internal_active_cells.size)
+                    and
+                    (len(self.internal_active_cells.sparse) > 0)
+            ):
+                self.context_active_cells.sparse = self.internal_active_cells.sparse
+            else:
+                self.context_active_cells.sparse = self._sample_cells(
+                    self.context_messages.reshape(self.n_context_vars, -1)
+                )
 
             self.internal_active_cells.sparse = self._sample_cells(
-                internal_messages
+                self.internal_forward_messages.reshape(self.n_hidden_vars, -1)
             )
-            self.context_active_cells.sparse = self._sample_cells(
-                self.context_messages.reshape((self.n_context_vars, -1))
-            )
+
             if len(self.external_messages) > 0:
                 self.external_active_cells.sparse = self._sample_cells(
-                    self.external_messages.reshape((self.n_external_vars, -1))
+                    self.external_messages.reshape(self.n_external_vars, -1)
                 )
 
             # learn context segments
             # use context cells and external cells to predict internal cells
             if self.enable_context_connections:
-                self._learn(
+                (
+                    self.cells_to_grow_new_context_segments,
+                    self.new_context_segments
+                 ) = self._learn(
                     np.concatenate(
                         [
                             (
@@ -575,6 +617,56 @@ class Layer:
             )
 
         self.timestep += 1
+
+    def _update_posterior(self, observation):
+        self.observation_messages = sparse_to_dense(observation, size=self.input_sdr_size)
+        cells = self._get_cells_for_observation(observation)
+        obs_factor = sparse_to_dense(cells, like=self.internal_forward_messages)
+
+        messages = self.internal_forward_messages.reshape(self.n_hidden_vars, -1)
+        obs_factor = obs_factor.reshape(self.n_hidden_vars, -1)
+
+        messages = normalize(messages * obs_factor, obs_factor)
+
+        # detect bursting vars
+        bursting_vars_mask = self._detect_bursting_vars(messages, obs_factor)
+
+        if self.replace_uniform_prior:
+            # replace priors for bursting vars
+            if np.any(bursting_vars_mask):
+                # TODO decrease probability to sample frequently active cells
+                # TODO decrease probability to sample cells with many segments
+                bursting_factor = obs_factor[bursting_vars_mask]
+                winners = self._sample_cells(normalize(bursting_factor))
+                bursting_factor = sparse_to_dense(
+                    winners,
+                    size=bursting_factor.size,
+                    dtype=bursting_factor.dtype
+                ).reshape(bursting_factor.shape)
+
+                messages[bursting_vars_mask] = bursting_factor
+
+        self.internal_forward_messages = messages.flatten()
+
+    def _detect_bursting_vars(self, messages, obs_factor):
+        """
+            messages: (n_vars, n_states)
+            obs_factor: (n_vars, n_states)
+        """
+        n_states = obs_factor.sum(axis=-1)
+        self.state_uni_dkl = (
+                np.log(n_states) +
+                np.sum(
+                    messages * np.log(
+                        np.clip(
+                            messages, EPS, None
+                        )
+                    ),
+                    axis=-1
+                )
+        )
+
+        return self.state_uni_dkl < self.bursting_threshold
 
     def _propagate_belief(
             self,
@@ -652,6 +744,11 @@ class Layer:
             log_prediction_for_cells_with_factors = np.add.reduceat(
                 log_excitation_per_factor, indices=reduce_inxs
             )
+
+            # avoid overflow
+            log_prediction_for_cells_with_factors[
+                log_prediction_for_cells_with_factors < -100
+            ] = -np.inf
 
             log_next_messages[cells_with_factors] = log_prediction_for_cells_with_factors
 
@@ -749,6 +846,8 @@ class Layer:
             vars_for_incorrect_segments
         ]
 
+        return cells_to_grow_new_segments, new_segments
+
     def _calculate_learning_segments(self, active_cells, next_active_cells, factors: Factors):
         # determine which segments are learning and growing
         active_cells_sdr = SDR(self.total_cells)
@@ -779,14 +878,25 @@ class Layer:
 
     def _get_cells_for_observation(self, obs_states):
         vars_for_obs_states = obs_states // self.n_obs_states
-        all_vars = np.arange(self.n_obs_vars)
-        vars_without_states = all_vars[np.isin(all_vars, vars_for_obs_states, invert=True)]
+        obs_states_per_var = obs_states - vars_for_obs_states * self.n_obs_states
+
+        hid_vars = (
+            np.tile(np.arange(self.n_hidden_vars_per_obs_var), len(vars_for_obs_states)) +
+            vars_for_obs_states * self.n_hidden_vars_per_obs_var
+        )
+        hid_columns = (
+            np.repeat(obs_states_per_var, self.n_hidden_vars_per_obs_var) +
+            self.n_obs_states * hid_vars
+        )
+
+        all_vars = np.arange(self.n_hidden_vars)
+        vars_without_states = all_vars[np.isin(all_vars, hid_vars, invert=True)]
 
         cells_for_empty_vars = self._get_cells_in_vars(vars_without_states)
 
         cells_in_columns = (
                 (
-                    obs_states * self.cells_per_column
+                    hid_columns * self.cells_per_column
                 ).reshape((-1, 1)) +
                 np.arange(self.cells_per_column, dtype=UINT_DTYPE)
             ).flatten()
@@ -1032,9 +1142,17 @@ class Layer:
 
         return np.array(new_segments, dtype=UINT_DTYPE)
 
-    def draw_messages(self, messages, figsize=10, aspect_ratio=0.3, non_zero=True):
-        n_cols = int(np.ceil(np.sqrt(self.n_hidden_vars / aspect_ratio)))
-        n_rows = int(np.floor(n_cols * aspect_ratio))
+    @staticmethod
+    def draw_messages(
+            messages,
+            n_vars,
+            figsize=10,
+            aspect_ratio=0.3,
+            non_zero=True
+    ):
+        messages = messages.reshape(n_vars, -1)
+        n_cols = max(int(np.ceil(np.sqrt(n_vars / aspect_ratio))), 1)
+        n_rows = max(int(np.floor(n_cols * aspect_ratio)), 1)
 
         fig, axs = plt.subplots(nrows=n_rows, ncols=n_cols, figsize=(figsize, figsize*aspect_ratio))
 
