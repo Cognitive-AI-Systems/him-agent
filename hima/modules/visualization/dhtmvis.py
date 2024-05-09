@@ -35,7 +35,15 @@ class DHTMVisualizer:
                 ['context', 'prediction', 'internal'],
                 ['.', 'obs_states_prediction', 'obs_states']
             ],
-            height_ratios=[0.25, 1, 0.25]
+            height_ratios=[0.25, 1, 0.25],
+            per_subplot_kw={
+                'external': {'title': 'external'},
+                'context': {'title': 'context'},
+                'prediction': {'title': 'prediction'},
+                'internal': {'title': 'internal'},
+                'obs_states_prediction': {'title': 'obs_states_prediction'},
+                'obs_states': {'title': 'obs_states'}
+            }
         )
         self.fig_segments = plt.figure('segments')
         self.segments = self.fig_segments.subplot_mosaic(
@@ -43,7 +51,13 @@ class DHTMVisualizer:
                 ['.', 'external_fields_of_new', '.'],
                 ['total_per_cell', 'context_fields_of_new', 'cells_to_grow_new'],
             ],
-            height_ratios=[0.25, 1]
+            height_ratios=[0.25, 1],
+            per_subplot_kw={
+                'external_fields_of_new': {'title': 'external_fields'},
+                'total_per_cell': {'title': 'total_per_cell'},
+                'context_fields_of_new': {'title': 'context_fields'},
+                'cells_to_grow_new': {'title': 'cells_to_grow_new'}
+            }
         )
 
         self.fig_messages.canvas.mpl_connect('key_press_event', self.step)
