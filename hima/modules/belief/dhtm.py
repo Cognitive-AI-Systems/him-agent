@@ -1284,43 +1284,65 @@ class DHTM(Layer):
         if self.vis_server:
             self._send_json_dict({'type': 'phase', 'phase': 'learning'})
 
-        self.internal_messages = self.initial_forward_messages.copy()
+        # get prior
+        self.set_context_messages(self.initial_forward_messages.copy())
+        self.set_external_messages(self.initial_external_messages.copy())
+        self.predict()
         self.internal_active_cells.sparse = self._sample_cells(
-            self.internal_messages.reshape(self.n_hidden_vars, -1)
+            self.context_messages.reshape(self.n_hidden_vars, -1)
         )
+
         for t in range(1, len(self.forward_messages_buffer)):
-            self.set_external_messages(self.external_messages_buffer[t - 1].copy())
-
-            if self.use_backward_messages:
-                # update forward messages
-                if t < len(self.observation_messages_buffer):
-                    self.set_context_messages(self.internal_active_cells.dense.astype(REAL64_DTYPE))
-                    self.predict()
-                    self.observation_messages = self.observation_messages_buffer[t].copy()
-                    self.internal_messages = self._get_posterior()
-                else:
-                    # we don't have an observation for initial backward step
-                    # so just copy backward messages
-                    self.internal_messages = self.backward_messages_buffer[t].copy()
-                self.forward_messages_buffer[t] = self.internal_messages.copy()
-                # combine forward and backward messages
-                self.internal_messages *= self.backward_messages_buffer[t]
-                self.internal_messages = (
-                    normalize(self.internal_messages.reshape(self.n_hidden_vars, -1))
-                ).flatten()
-            else:
-                self.set_context_messages(self.forward_messages_buffer[t-1].copy())
-                self.internal_messages = self.forward_messages_buffer[t].copy()
-
-            # sample distributions
-            self.context_active_cells.sparse = self.internal_active_cells.sparse.copy()
-            self.internal_active_cells.sparse = self._sample_cells(
-                self.internal_messages.reshape(self.n_hidden_vars, -1)
-            )
-
             if len(self.external_messages) > 0:
                 self.external_active_cells.sparse = self._sample_cells(
                     self.external_messages.reshape(self.n_external_vars, -1)
+                )
+            self.context_active_cells.sparse = self.internal_active_cells.sparse.copy()
+
+            # update forward messages
+            if t < len(self.observation_messages_buffer):
+                self.set_external_messages(self.external_messages_buffer[t].copy())
+                self.observation_messages = self.observation_messages_buffer[t].copy()
+                self.context_messages = self._get_posterior()
+                self.forward_messages_buffer[t] = self.context_messages.copy()
+                # combine forward and backward messages
+                if self.use_backward_messages:
+                    self.context_messages *= self.backward_messages_buffer[t]
+                    self.context_messages = (
+                        normalize(self.context_messages.reshape(self.n_hidden_vars, -1))
+                    ).flatten()
+
+                self.predict()
+
+                # sample cells
+                dependent_cells = self.context_forward_factors.segments_to_receptive_field(
+                    self.context_forward_factors.sample_segments()
+                )
+                context_cells_mask = (
+                        (dependent_cells >= self.context_cells_range[0]) &
+                        (dependent_cells < self.context_cells_range[1])
+                )
+                dependent_cells = dependent_cells[context_cells_mask] - self.context_cells_range[0]
+
+                vars_for_dependent_cells = dependent_cells // self.n_hidden_states
+                vars_without_cells = np.isin(
+                    np.arange(self.n_hidden_vars), vars_for_dependent_cells,
+                    assume_unique=True, invert=True
+                )
+
+                independent_cells = sample_categorical_variables(
+                    self.context_messages.reshape(self.n_hidden_vars, -1)[vars_without_cells],
+                    self._rng
+                ) + vars_without_cells * self.n_hidden_vars
+
+                self.internal_active_cells.sparse = np.concatenate(
+                    [dependent_cells, independent_cells]
+                )
+            else:
+                self.internal_active_cells.sparse = self._sample_cells(
+                    self.initial_backward_messages.reshape(
+                        self.n_hidden_vars, -1
+                    )
                 )
 
             # grow forward connections

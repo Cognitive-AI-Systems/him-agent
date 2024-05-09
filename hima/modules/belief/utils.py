@@ -21,6 +21,10 @@ def softmax(x, beta=1.0):
     return e_x / e_x.sum()
 
 
+def sigmoid(x):
+    return 1/(1+np.exp(-x))
+
+
 def normalize(x, default_values=None):
     norm_x = x.copy()
     norm = x.sum(axis=-1)

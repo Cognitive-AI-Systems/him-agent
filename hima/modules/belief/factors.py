@@ -7,7 +7,8 @@
 from __future__ import annotations
 
 from hima.modules.htm.connections import Connections
-from hima.modules.belief.utils import EPS, INT_TYPE, UINT_DTYPE, REAL_DTYPE, REAL64_DTYPE
+from hima.modules.belief.utils import EPS, INT_TYPE, UINT_DTYPE, REAL_DTYPE, REAL64_DTYPE, \
+    sigmoid, sample_categorical_variables, softmax
 import numpy as np
 
 
@@ -30,6 +31,7 @@ class Factors:
             fraction_of_segments_to_prune,
             max_segments_per_cell,
             min_log_factor_value=-1,
+            seed=None
     ):
         """
             hidden vars are those that we predict, or output vars
@@ -50,6 +52,8 @@ class Factors:
         self.n_hidden_states = n_hidden_states
         self.max_factors = n_hidden_vars * max_factors_per_var
         self.max_segments_per_cell = max_segments_per_cell
+        self.seed = seed
+        self._rng = np.random.default_rng(self.seed)
 
         self.connections = Connections(
             numCells=n_cells,
@@ -102,6 +106,8 @@ class Factors:
         )
 
         self.segments_in_use = np.empty(0, dtype=UINT_DTYPE)
+        self.active_segments = np.empty(0, dtype=UINT_DTYPE)
+        self.active_segments_loglikelihood = np.empty(0, dtype=REAL64_DTYPE)
         self.factors_in_use = np.empty(0, dtype=UINT_DTYPE)
         self.factor_score = np.empty(0, dtype=REAL_DTYPE)
 
@@ -224,6 +230,8 @@ class Factors:
             messages,
             active_segments
     ):
+        self.active_segments = active_segments.copy()
+
         messages = messages[self.receptive_fields[active_segments]]
         synapse_efficiency = self.synapse_efficiency[active_segments]
 
@@ -234,6 +242,26 @@ class Factors:
 
         independent_part = np.sum((1 - synapse_efficiency) * np.log(messages), axis=-1)
 
-        log_likelihood = dependent_part + independent_part
+        self.active_segments_loglikelihood = dependent_part + independent_part
 
-        return log_likelihood
+        return self.active_segments_loglikelihood
+
+    def sample_segments(self):
+        # TODO make it correct for multiple factors
+        # probability that no segments will be activated
+        p = np.prod(1 - sigmoid(self.active_segments_loglikelihood))
+        gamma = self._rng.random()
+        if gamma > p:
+            winners = sample_categorical_variables(
+                softmax(self.active_segments_loglikelihood).reshape(
+                    1, -1
+                ),
+                self._rng
+            )
+        else:
+            winners = []
+        return winners
+
+    def segments_to_receptive_field(self, segments):
+        return np.unique(self.receptive_fields[segments].flatten())
+
