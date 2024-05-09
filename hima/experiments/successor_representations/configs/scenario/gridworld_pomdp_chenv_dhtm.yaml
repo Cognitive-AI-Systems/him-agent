@@ -10,17 +10,42 @@
   check_every: 'episodes'
   action: switch_logging
   params: {}
+#- condition: ['episodes', 'equal', 0, 'norepeat']
+#  check_every: 'episodes'
+#  action: switch_visualizing
+#  params: {}
+
+#- condition: ['episodes', 'equal', 0, 'norepeat']
+#  check_every: 'episodes'
+#  action: set_parameters
+#  params: {
+#            agent.agent.cortical_column.layer.grow_backward_connections: true
+#  }
+#
+#- condition: ['episodes', 'equal', 200, 'norepeat']
+#  check_every: 'episodes'
+#  action: set_parameters
+#  params: {
+#            agent.agent.cortical_column.layer.use_backward_messages: true
+#  }
+
 
 # ---- changing environment ----
-- condition: ['episodes', 'equal', 0, 'norepeat']
-  check_every: 'episodes'
-  action: change_setup
-  params:
-    setup: free
-    setup_id: 0
-- condition: ['episodes', 'equal', 300, 'norepeat']
-  check_every: 'episodes'
-  action: change_setup
-  params:
-    setup: blocked
-    setup_id: 1
+#- condition: ['episodes', 'equal', 0, 'norepeat']
+#  check_every: 'episodes'
+#  action: change_setup
+#  params:
+#    setup: free
+#    setup_id: 0
+#- condition: ['episodes', 'equal', 300, 'norepeat']
+#  check_every: 'episodes'
+#  action: change_setup
+#  params:
+#    setup: blocked
+#    setup_id: 1
+
+#- condition: ['episodes', '>', 97, 'repeat']
+#  check_every: 'episodes'
+#  action: save_buffer
+#  params:
+#    path: 'logs/messages'

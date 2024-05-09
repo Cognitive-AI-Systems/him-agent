@@ -1,5 +1,5 @@
 cells_per_column: 40
-n_hidden_vars_per_obs_var: 3
+n_hidden_vars_per_obs_var: 2
 
 external_vars_boost: 10  # set it non-zero to shift probability of choosing external var for factor
 unused_vars_boost: 0
@@ -10,9 +10,12 @@ inverse_temp_internal: 1.0
 cell_activation_threshold: 0.0001
 cells_activity_lr: 0.9
 developmental_period: 30000
+use_backward_messages: True
+posterior_noise: 0.001
+visualize: false
 
 context_factors_conf:
-  n_vars_per_factor: 4
+  n_vars_per_factor: 3
   max_factors_per_var: 1
   factor_lr: 0.1
   synapse_lr: 0.1
@@ -23,5 +26,7 @@ context_factors_conf:
   var_score_lr: 0.001
   fraction_of_segments_to_prune: 0.0
   max_segments_per_cell: 255
+  min_log_factor_value: -5
+  sampling_probability_threshold: 0.5
 
 # reset_context_period: 80

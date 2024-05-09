@@ -25,6 +25,20 @@ setup:
 #    log_step: episodes
 #    log_period: 100
 
+state_image:
+  class: GridworldStateImage
+  params:
+    name: representations/repr
+    repr_att: state_representation
+    state_att: environment.current_state
+    normalized: True
+    n_states: 25
+    update_step: steps
+    update_period: 1
+    log_step: episodes
+    log_period: 200
+
+
 step_scalar_metrics:
   class: ScalarMetrics
   params:
@@ -35,9 +49,12 @@ step_scalar_metrics:
       layer/surprise_hidden:
         agg: np.mean
         att: agent.agent.surprise
-      layer/segments:
+      layer/segments_forward:
         agg: np.mean
-        att: agent.num_segments
+        att: agent.num_segments_forward
+      layer/segments_backward:
+        agg: np.mean
+        att: agent.num_segments_backward
 #      sf/td_error:
 #        agg: np.mean
 #        att: agent.agent.td_error
@@ -59,36 +76,36 @@ episodic_scalar_metrics:
       main_metrics/steps:
         agg: np.mean
         att: steps
-      agent/n_states:
-        agg: np.mean
-        att: agent.n_states
+#      agent/n_states:
+#        agg: np.mean
+#        att: agent.n_states
     update_step: episodes
     update_period: 1
     log_step: episodes
     log_period: 1
 
-trajectory:
-  class: Histogram
-  params:
-    name: agent/trajectory
-    att: state_visited
-    normalized: true
-    update_step: steps
-    update_period: 1
-    log_step: episodes
-    log_period: 25
+#trajectory:
+#  class: Histogram
+#  params:
+#    name: agent/trajectory
+#    att: state_visited
+#    normalized: true
+#    update_step: steps
+#    update_period: 1
+#    log_step: episodes
+#    log_period: 200
 
 
-value_function:
-  class: Histogram
-  params:
-    name: agent/value_function
-    att: state_value
-    normalized: true
-    update_step: steps
-    update_period: 1
-    log_step: episodes
-    log_period: 25
+#value_function:
+#  class: Histogram
+#  params:
+#    name: agent/value_function
+#    att: state_value
+#    normalized: true
+#    update_step: steps
+#    update_period: 1
+#    log_step: episodes
+#    log_period: 25
 #
 #
 #q_function:
@@ -179,22 +196,24 @@ value_function:
 #    log_step: episodes
 #    log_period: 100
 
-sr_gridworld:
-  class: GridworldSR
-  params:
-    name: sr
-    att: agent.planned_sr
-    repr_att: agent.state_repr
-    state_att: environment.current_state
-    update_step: steps
-    log_step: episodes
-    update_period: 1
-    log_period: 1
-    grid_shape: [ 5, 5 ]
-    max_patterns: 10000
-    state_detection_threshold: 0.1
-    activity_lr: 0.001
-    lr: 0.9
-    norm: False
-    preparing_period: 10
-    log_fps: 2
+#sr_gridworld:
+#  class: GridworldSR
+#  params:
+#    name: sr
+#    sr_att: agent.planned_sf
+#    sf_att: agent.planned_sf
+#    repr_att: agent.state_repr
+#    state_att: environment.current_state
+#    state_information_att:
+#    update_step: steps
+#    log_step: episodes
+#    update_period: 1
+#    log_period: 1
+#    grid_shape: [ 5, 5 ]
+#    max_patterns: 10000
+#    state_detection_threshold: 0.1
+#    activity_lr: 0.001
+#    lr: 0.9
+#    norm: False
+#    preparing_period: 10
+#    log_fps: 2
