@@ -998,10 +998,11 @@ class DHTM(Layer):
             visualization_server=(HOST, PORT),
             visualize=True
     ):
+        self.seed = seed
         self._rng = np.random.default_rng(seed)
 
-        if seed:
-            self._legacy_rng = Random(seed)
+        if self.seed:
+            self._legacy_rng = Random(self.seed)
         else:
             self._legacy_rng = Random()
 
@@ -1095,8 +1096,8 @@ class DHTM(Layer):
         context_factors_conf['n_vars'] = self.total_vars
         context_factors_conf['n_hidden_states'] = self.n_hidden_states
         context_factors_conf['n_hidden_vars'] = self.n_hidden_vars
-        self.context_forward_factors = Factors(**context_factors_conf)
-        self.context_backward_factors = Factors(**context_factors_conf)
+        self.context_forward_factors = Factors(**context_factors_conf, seed=self.seed)
+        self.context_backward_factors = Factors(**context_factors_conf, seed=self.seed)
 
         self.cells_to_grow_new_context_segments_forward = np.empty(0)
         self.new_context_segments_forward = np.empty(0)
@@ -1333,7 +1334,7 @@ class DHTM(Layer):
                 independent_cells = sample_categorical_variables(
                     self.context_messages.reshape(self.n_hidden_vars, -1)[vars_without_cells],
                     self._rng
-                ) + vars_without_cells * self.n_hidden_vars
+                ) + np.flatnonzero(vars_without_cells) * self.n_hidden_states
 
                 self.internal_active_cells.sparse = np.concatenate(
                     [dependent_cells, independent_cells]
