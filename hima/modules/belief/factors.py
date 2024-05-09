@@ -31,6 +31,7 @@ class Factors:
             fraction_of_segments_to_prune,
             max_segments_per_cell,
             min_log_factor_value=-1,
+            sampling_probability_threshold=0.01,
             seed=None
     ):
         """
@@ -52,6 +53,7 @@ class Factors:
         self.n_hidden_states = n_hidden_states
         self.max_factors = n_hidden_vars * max_factors_per_var
         self.max_segments_per_cell = max_segments_per_cell
+        self.sampling_probability_threshold = sampling_probability_threshold
         self.seed = seed
         self._rng = np.random.default_rng(self.seed)
 
@@ -248,16 +250,24 @@ class Factors:
 
     def sample_segments(self):
         # TODO make it correct for multiple factors
+        segments_activation_prob = sigmoid(self.active_segments_loglikelihood)
+        # filter segments according to threshold
+        filter_mask = segments_activation_prob > self.sampling_probability_threshold
+        segments_activation_prob = segments_activation_prob[filter_mask]
+        active_segments = self.active_segments[filter_mask]
+        logits = self.active_segments_loglikelihood[filter_mask]
+        # active_segments
         # probability that no segments will be activated
-        p = np.prod(1 - sigmoid(self.active_segments_loglikelihood))
+        p = np.prod(1 - segments_activation_prob)
         gamma = self._rng.random()
         if gamma > p:
             winners = sample_categorical_variables(
-                softmax(self.active_segments_loglikelihood).reshape(
+                softmax(logits).reshape(
                     1, -1
                 ),
                 self._rng
             )
+            winners = active_segments[winners]
         else:
             winners = []
         return winners
